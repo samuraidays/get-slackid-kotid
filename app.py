@@ -19,16 +19,19 @@ def lambda_handler(event, context):
     ## 書き込むデータを作成する
     write_airtable_all_data = []
     write_airtable_all_data = createWriteData(airtabledata)
+    datanum = len(write_airtable_all_data)
     
-    logger.info(write_airtable_all_data)
     ## airtableにデータを書き込み
     for writedata in write_airtable_all_data:
     	recordid = writedata[0]
     	slackid = writedata[1]
     	kotid = writedata[2]
+    	email = writedata[3]
     	
     	updateAirTable(recordid, slackid, kotid)
+    	logger.info(email + "のデータを追加しました")
     
+    logger.info(str(datanum) + "件のデータを追加しました")
     response = {
       "text": "終了しました",
     }
@@ -55,7 +58,7 @@ def getAirTable():
         return 
     
     elif type(atRecord) is dict:
-        logger.info("dict型で1データのみです")
+        #logger.info("dict型で1データのみです")
         add1List = []
         rec = atRecord
         recordid = rec.get('id')
@@ -70,7 +73,7 @@ def getAirTable():
         return addAllList
     
     elif type(atRecord) is list:
-        logger.info("list型で複数データのみです")
+        #logger.info("list型で複数データのみです")
         
         for rec in atRecord:
             add1List = []
@@ -92,11 +95,13 @@ def getAirTable():
 def createWriteData(airtabledata):
     _write_airtable_all_data = []
     
-    # recordid, slackid, employeeidを１つのデータとして書き込む人数分データを作成する
+    # recordid, slackid, employeeid, emailを１つのデータとして書き込む人数分データを作成する
     for data in airtabledata:
         write_airtable_1_data = []
 
+        # 従業員番号が設定されている必要がある
         employeenumber = data[1]
+        # メールアドレスが設定されている必要がある
         email = data[2]
         recordid = data[0]
         slackid = getSlackId(email)
@@ -111,6 +116,7 @@ def createWriteData(airtabledata):
         write_airtable_1_data.append(recordid)
         write_airtable_1_data.append(slackid)
         write_airtable_1_data.append(employeeid)
+        write_airtable_1_data.append(email)
 
         _write_airtable_all_data.append(write_airtable_1_data)
 
@@ -118,19 +124,23 @@ def createWriteData(airtabledata):
 
 ## slackidを取得する
 def getSlackId(email):
-    url = "https://slack.com/api/users.lookupByEmail"
+    url = os.environ['SLACK_ID_URL']
     slackBotToken = os.environ['SLACK_BOT_TOKEN']
 
-    payload = {
-        'content-type': "application/json",
-        'token': slackBotToken,
-        'email': email
-        }
+    headers = {
+        'content-type': "application/x-www-form-urlencoded",
+        'Authorization': 'Bearer ' + slackBotToken,
+    }
 
-    response = requests.request("GET", url, params=payload)
+    data = {
+        'email': email
+    }
+
+    response = requests.request("GET", url, headers=headers, params=data)
     userinfo = json.loads(response.text)
+    #logger.info(userinfo['ok'])
   
-    if userinfo['ok'] != 'False':
+    if str(userinfo['ok']) == 'True':
     	slackid = userinfo.get('user').get('id')
     	return slackid
     else:
